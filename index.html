@@ -8,7 +8,8 @@
   <body>
     <div>
       <div class="top-bar"></div>
-      <h1>Online AI</h1>
+      <h1>AI chatbot</h1>
+      <hr>
       <form id="ai-form">
         <div class="container">
           <div id="answer">
@@ -64,9 +65,10 @@
 
         const data = await response.json();
         responseBox.textContent = data.choices[0].message.content;
-        textarea.value = ""; // clear input
+        textarea.value = "";
       });
     </script>
   </body>
+</html>
 </html>
 
