@@ -29,11 +29,13 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xmldom@0.8.10/xmldom.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
     <script>
       const form = document.getElementById("ai-form");
       const textarea = document.getElementById("userInput");
       const responseBox = document.getElementById("response");
       let extraInfo = "";
+      let prevMemory = "Context:";
 
       textarea.addEventListener("keydown", function (e) {
         if (e.key === "Enter" && !e.shiftKey) {
@@ -48,15 +50,28 @@
         if (!userInput) return;
 
         responseBox.innerHTML = "Loading...";
-
         const response = await fetch("https://groq-proxy.joshbos119.workers.dev", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userInput, extraInfo }),
+          body: JSON.stringify({userInput: `[BACKGROUND MEMORY: ${prevMemory}]\n\n[CURRENT USER QUESTION: ${userInput}]`, extraInfo}),
         });
 
         const data = await response.json();
-        responseBox.innerHTML = marked.parse(data.choices[0].message.content);
+        let groqAnswer = data.choices[0].message.content
+        responseBox.innerHTML = marked.parse(groqAnswer);
+
+        let summaryPrompt = `Write a 1-sentence summary of this exchange in the third person (e.g., 'The user asked about X and the AI explained Y'). Only return the sentence, nothing else. Question: ${userInput}, Answer: ${groqAnswer}`;
+        const summary = await fetch("https://groq-proxy.joshbos119.workers.dev", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({userInput: summaryPrompt}),
+        });
+
+        const summaryData = await summary.json();
+        console.log(summaryData);
+        const newSummaryChunk = summaryData.choices[0].message.content;
+
+        prevMemory += " " + newSummaryChunk
         textarea.value = "";
       });
 
@@ -69,20 +84,20 @@
           extraInfo = "";
           return;
         }
-        
-        if (!file.name.endsWith(".pptx")) {
-          alert("Please upload a .pptx file.");
-          fileStatus.textContent = "";
-          extraInfo = "";
-          return;
-        }
 
         fileStatus.textContent = `File attached: ${file.name}`;
         
-        const arrayBuffer = await file.arrayBuffer();
-        const text = await getTextFromPPTX(arrayBuffer);
-        extraInfo = text;
-        console.log("Extracted text:", extraInfo);
+        if (file.name.endsWith(".pptx")) {
+          const arrayBuffer = await file.arrayBuffer();
+          const text = await getTextFromPPTX(arrayBuffer);
+          extraInfo = text;
+        }
+
+        if (file.name.endsWith(".docx")) {
+          const arrayBuffer = await file.arrayBuffer();
+          const text = await getTextFromDOCX(arrayBuffer);
+          extraInfo = text;
+        }
       });
 
       async function getTextFromPPTX(arrayBuffer) {
@@ -102,30 +117,22 @@
         return text.trim();
       }
 
-      async function getTextFromDocx(arrayBuffer) {
+      async function getTextFromDOCX(arrayBuffer) {
         try {
-            // Validate file existence
-            if (!fs.existsSync(filePath)) {
-                throw new Error("File not found: " + filePath);
-            }
-    
-            // Ensure it's a .docx file
-            if (path.extname(filePath).toLowerCase() !== ".docx") {
-                throw new Error("Only .docx files are supported.");
-            }
-    
-            // Extract text
-            const result = await mammoth.extractRawText({ path: filePath });
-            console.log("Extracted Text:\n", result.value.trim());
-        } catch (err) {
-            console.error("Error reading Word file:", err.message);
+          const result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
+          
+          return result.value; 
+        } catch (error) {
+          console.error("Error parsing DOCX:", error);
+          return "";
         }
       }
+
       function getTextFromNodes(node, tagName, namespaceURI) {
-        let text = '';
+        let text = "";
         const textNodes = node.getElementsByTagNameNS(namespaceURI, tagName);
         for (let i = 0; i < textNodes.length; i++) {
-          text += textNodes[i].textContent + ' ';
+          text += textNodes[i].textContent + " ";
         }
         return text.trim();
       }
