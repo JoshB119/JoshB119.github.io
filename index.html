@@ -102,6 +102,25 @@
         return text.trim();
       }
 
+      async function getTextFromDocx(arrayBuffer) {
+        try {
+            // Validate file existence
+            if (!fs.existsSync(filePath)) {
+                throw new Error("File not found: " + filePath);
+            }
+    
+            // Ensure it's a .docx file
+            if (path.extname(filePath).toLowerCase() !== ".docx") {
+                throw new Error("Only .docx files are supported.");
+            }
+    
+            // Extract text
+            const result = await mammoth.extractRawText({ path: filePath });
+            console.log("Extracted Text:\n", result.value.trim());
+        } catch (err) {
+            console.error("Error reading Word file:", err.message);
+        }
+      }
       function getTextFromNodes(node, tagName, namespaceURI) {
         let text = '';
         const textNodes = node.getElementsByTagNameNS(namespaceURI, tagName);
